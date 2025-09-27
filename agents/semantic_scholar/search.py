@@ -1,10 +1,10 @@
-"""Utilities for querying the Semantic Scholar API."""
+"""Utilities for querying scholarly APIs and formatting paper records."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Protocol, Sequence
 
 import requests
 
@@ -19,8 +19,9 @@ class SemanticScholarError(RuntimeError):
 
 @dataclass
 class PaperRecord:
-    """Structured representation of a Semantic Scholar paper."""
+    """Structured representation of a scholarly paper from any provider."""
 
+    source: str
     paper_id: Optional[str]
     title: str
     url: Optional[str]
@@ -31,9 +32,10 @@ class PaperRecord:
     source_query: str
 
     @classmethod
-    def from_payload(cls, payload: dict, query: str) -> "PaperRecord":
+    def from_semantic_scholar(cls, payload: dict, query: str) -> "PaperRecord":
         authors = [author.get("name", "?") for author in payload.get("authors", [])]
         return cls(
+            source="semantic_scholar",
             paper_id=payload.get("paperId"),
             title=payload.get("title") or "Untitled",
             url=payload.get("url"),
@@ -43,6 +45,24 @@ class PaperRecord:
             authors=authors,
             source_query=query,
         )
+
+
+@dataclass
+class ProviderResult:
+    """Result bundle for a specific search provider."""
+
+    provider: str
+    papers: Sequence[PaperRecord]
+    error: Optional[str] = None
+
+
+class SearchProvider(Protocol):
+    """Protocol for provider adapters used by the multi-source search tool."""
+
+    name: str
+
+    def search(self, query: str, *, limit: Optional[int] = None) -> List[PaperRecord]:
+        ...
 
 
 def _format_authors(authors: Iterable[str]) -> str:
@@ -80,6 +100,25 @@ def format_papers(papers: Iterable[PaperRecord]) -> str:
     return "\n\n".join(lines)
 
 
+def format_provider_results(results: Iterable[ProviderResult]) -> str:
+    """Format grouped provider results for tool handoff to the LLM."""
+
+    sections: List[str] = []
+    for result in results:
+        header = f"Provider: {result.provider}"
+        if result.error:
+            sections.append(f"{header}\nError: {result.error}")
+            continue
+        body = format_papers(result.papers)
+        if not result.papers:
+            sections.append(f"{header}\nNo papers returned.")
+        else:
+            sections.append(f"{header}\n{body}")
+    if not sections:
+        return "No providers produced results."
+    return "\n\n".join(sections)
+
+
 class SemanticScholarClient:
     """Small client helper that supports authenticated and unauthenticated search."""
 
@@ -95,6 +134,7 @@ class SemanticScholarClient:
         self.timeout = timeout
         self.default_limit = default_limit
         self.session = session or requests.Session()
+        self.name = "Semantic Scholar"
 
     def search(self, query: str, *, limit: Optional[int] = None) -> List[PaperRecord]:
         query = query.strip()
@@ -109,7 +149,7 @@ class SemanticScholarClient:
         else:
             payload = self._search_unauth(query, limit)
 
-        papers = [PaperRecord.from_payload(item, query) for item in payload]
+        papers = [PaperRecord.from_semantic_scholar(item, query) for item in payload]
         return papers
 
     # ------------------------------------------------------------------

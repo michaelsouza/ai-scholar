@@ -1,4 +1,4 @@
-"""Workflow orchestrator for the Semantic Scholar dual-agent system."""
+"""Workflow orchestrator for the dual-agent scholarly search system."""
 
 from __future__ import annotations
 
@@ -121,6 +121,7 @@ class SemanticScholarOrchestrator:
 
         table = Table(title="Classification Results", show_lines=False)
         table.add_column("Title", style="bold", overflow="fold")
+        table.add_column("Source", style="blue")
         table.add_column("Label", style="cyan")
         table.add_column("Confidence", style="magenta")
         table.add_column("Explanation", style="white", overflow="fold")
@@ -131,6 +132,7 @@ class SemanticScholarOrchestrator:
             results.append(result)
             table.add_row(
                 paper.title,
+                paper.source,
                 result.label,
                 f"{result.confidence:.2f}",
                 result.explanation,
@@ -145,7 +147,8 @@ class SemanticScholarOrchestrator:
             if result.is_strong:
                 continue
             lines.append(
-                f"Paper '{result.paper.title}' classified as {result.label} (confidence {result.confidence:.2f}). "
+                f"Paper '{result.paper.title}' from {result.paper.source} classified as {result.label} "
+                f"(confidence {result.confidence:.2f}). "
                 f"Rationale: {result.explanation}"
             )
         if not lines:

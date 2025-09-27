@@ -3,16 +3,17 @@
 The Semantic Scholar workflow now uses two specialised LangChain-based agents plus a persistence layer. This document captures the moving parts so you can extend them safely.
 
 ## Module Layout
-- `agents/semantic_scholar/search.py`: thin API client that supports authenticated and unauthenticated access, automatic pagination, and friendly formatting helpers.
-- `agents/semantic_scholar/query_agent.py`: builds a LangGraph ReAct agent around the Semantic Scholar tool. It records every tool invocation so downstream components can access raw papers.
+- `agents/semantic_scholar/search.py`: shared paper data structures, formatting helpers, and the Semantic Scholar client.
+- `agents/semantic_scholar/google_scholar.py`: SerpAPI-backed Google Scholar client that yields `PaperRecord` objects.
+- `agents/semantic_scholar/query_agent.py`: builds a LangGraph ReAct agent around the multi-provider Scholarly Search tool and records every invocation so downstream components can access raw papers.
 - `agents/semantic_scholar/classifier.py`: lightweight classification agent that labels each paper as `strong`, `partial`, or `irrelevant` and emits confidence plus rationale.
 - `agents/semantic_scholar/storage.py`: JSON helper that persists runs and paper-level judgements.
 - `agents/semantic_scholar/orchestrator.py`: coordinates the two agents, loops through refinement iterations, and stores outputs.
 - `agents/semantic_scholar_agent.py`: CLI entry point that wires environment config, creates the agents, and boots the orchestrator.
 
 ## Execution Flow
-1. CLI loads `.env`, validates `OPENROUTER_API_KEY`, warns if Semantic Scholar key is absent, and instantiates `SemanticScholarClient`.
-2. `QueryAgent` (LangGraph `create_react_agent`) receives the user focus and optional feedback, calls the Semantic Scholar tool at least once, and returns both the final message and structured paper metadata captured by the tool wrapper.
+1. CLI loads `.env`, validates `OPENROUTER_API_KEY`, warns if Semantic Scholar or Google Scholar keys are absent, and instantiates the available provider clients.
+2. `QueryAgent` (LangGraph `create_react_agent`) receives the user focus and optional feedback, calls the Scholarly Search tool at least once (fan-out across enabled providers), and returns both the final message and structured paper metadata captured by the tool wrapper.
 3. `ClassificationAgent` runs on each paper, returning JSON with label, confidence, and a brief explanation. Rich renders these decisions in a table for quick scanning.
 4. `SemanticScholarOrchestrator` persists the run via `PaperDatabase`, checks whether any `strong` labels were found, and, if not, asks the query agent to suggest a refined search string before the next iteration.
 5. The loop stops once a strong hit appears, the iteration cap is reached, or the query agent fails to propose a new query.
@@ -34,9 +35,10 @@ Confidence is expected to land in `[0.0, 1.0]`. Out-of-range values are clamped 
 - `agents/semantic_scholar/llm.py` centralises client construction and automatically falls back to `openai_api_base` if needed.
 - Temperatures are independently configurable to keep the query agent exploratory while the classifier remains deterministic.
 
-## Semantic Scholar Tooling
-- Authenticated path hits `/graph/v1/paper/search` with the `x-api-key` header; unauthenticated path leverages `/graph/v1/paper/search/bulk` with token-based pagination and 100-result safeguards.
-- Each tool call logs the textual summary for the LLM and preserves structured `PaperRecord` objects for persistence and classification.
+## Scholarly Tooling
+- Semantic Scholar: authenticated path hits `/graph/v1/paper/search` with the `x-api-key` header; unauthenticated path leverages `/graph/v1/paper/search/bulk` with token-based pagination and 100-result safeguards.
+- Google Scholar via SerpAPI: hits `search.json` with `engine=google_scholar`, extracts authors/venue/year heuristically, and raises descriptive errors when the API key is missing or invalid.
+- Each tool call logs the textual summary for the LLM and preserves structured `PaperRecord` objects for persistence and classification, tagged with their source.
 - Rich panels frame the tool call and response, truncating the display to keep the console readable without losing underlying data.
 
 ## Persistence Model

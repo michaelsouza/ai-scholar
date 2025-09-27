@@ -17,6 +17,7 @@ class PaperDatabaseTest(unittest.TestCase):
 
     def _paper(self) -> PaperRecord:
         return PaperRecord(
+            source="semantic_scholar",
             paper_id="p-1",
             title="Sample Paper",
             url="http://example.com",
@@ -65,6 +66,8 @@ class PaperDatabaseTest(unittest.TestCase):
         self.assertEqual(paper_entry["run_id"], run_id)
         self.assertEqual(paper_entry["classification"], "partial")
         self.assertEqual(paper_entry["raw_payload"]["label"], "partial")
+        self.assertEqual(paper_entry["source"], "semantic_scholar")
+        self.assertEqual(paper_entry["source_query"], "graph neural networks")
 
     def test_last_runs_returns_recent_entries(self) -> None:
         for iteration in range(1, 4):

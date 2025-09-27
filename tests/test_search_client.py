@@ -3,11 +3,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from agents.semantic_scholar.search import (
-    PaperRecord,
-    SemanticScholarClient,
-    SemanticScholarError,
-)
+from agents.semantic_scholar.google_scholar import GoogleScholarClient, GoogleScholarError
+from agents.semantic_scholar.search import PaperRecord, SemanticScholarClient, SemanticScholarError
 
 
 class FakeResponse:
@@ -78,6 +75,7 @@ class SemanticScholarClientTest(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertIsInstance(results[0], PaperRecord)
         self.assertEqual(results[0].paper_id, "p1")
+        self.assertEqual(results[0].source, "semantic_scholar")
         self.assertEqual(session.calls[0]["headers"].get("x-api-key"), "secret")
 
     def test_unauthenticated_search_uses_pagination(self) -> None:
@@ -122,6 +120,50 @@ class SemanticScholarClientTest(unittest.TestCase):
             client.search("graph neural networks", limit=1)
 
         self.assertIn("rate limit", str(ctx.exception).lower())
+
+
+class GoogleScholarClientTest(unittest.TestCase):
+    def test_google_scholar_converts_results(self) -> None:
+        payload = {
+            "organic_results": [
+                {
+                    "result_id": "gs1",
+                    "title": "Google Paper",
+                    "link": "http://example.com/gs1",
+                    "snippet": "Findings about AI.",
+                    "publication_info": {
+                        "summary": "Journal of AI, 2023",
+                        "authors": [{"name": "Grace"}],
+                    },
+                }
+            ]
+        }
+        session = FakeSession([FakeResponse(json_data=payload)])
+        client = GoogleScholarClient(api_key="serp", session=session, default_limit=2)
+
+        results = client.search("graph neural networks")
+
+        self.assertEqual(len(results), 1)
+        paper = results[0]
+        self.assertEqual(paper.source, "google_scholar")
+        self.assertEqual(paper.year, 2023)
+        self.assertIn("Grace", paper.authors)
+
+    def test_google_scholar_requires_api_key(self) -> None:
+        client = GoogleScholarClient(api_key=None)
+
+        with self.assertRaises(GoogleScholarError):
+            client.search("graph neural networks")
+
+    def test_google_scholar_surface_error_payload(self) -> None:
+        payload = {"error": "Invalid API key", "organic_results": []}
+        session = FakeSession([FakeResponse(json_data=payload)])
+        client = GoogleScholarClient(api_key="serp", session=session)
+
+        with self.assertRaises(GoogleScholarError) as ctx:
+            client.search("graph neural networks")
+
+        self.assertIn("invalid api key", str(ctx.exception).lower())
 
 
 if __name__ == "__main__":

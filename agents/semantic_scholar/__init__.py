@@ -4,6 +4,7 @@ from .classifier import ClassificationAgent, ClassificationResult
 from .orchestrator import OrchestratorConfig, SemanticScholarOrchestrator
 from .query_agent import QueryAgent, QueryAgentConfig
 from .storage import PaperDatabase
+from .google_scholar import GoogleScholarClient
 from .search import SemanticScholarClient, PaperRecord
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "QueryAgentConfig",
     "PaperDatabase",
     "SemanticScholarClient",
+    "GoogleScholarClient",
     "PaperRecord",
 ]

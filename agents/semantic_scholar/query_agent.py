@@ -1,9 +1,9 @@
-"""Query agent responsible for interacting with Semantic Scholar."""
+"""Query agent responsible for interacting with scholarly search providers."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 from langchain.agents import Tool
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -15,9 +15,9 @@ from rich.text import Text
 from .llm import build_openrouter_chat
 from .search import (
     PaperRecord,
-    SemanticScholarClient,
-    SemanticScholarError,
-    format_papers,
+    ProviderResult,
+    SearchProvider,
+    format_provider_results,
 )
 
 
@@ -33,10 +33,10 @@ class QueryAgentConfig:
     max_tool_chars: int = 1600
     system_prompt: str = (
         "You are an academic research assistant focused on finding highly relevant "
-        "papers on Semantic Scholar. Always call the Semantic Scholar Search tool at "
-        "least once before responding. Cite titles, venues, and publication years in "
-        "your answer and explicitly note if the unauthenticated API mode limits the "
-        "results."
+        "papers across scholarly databases. Always call the Scholarly Search tool at "
+        "least once before responding; it combines Semantic Scholar and Google Scholar "
+        "results. Cite titles, venues, and publication years in your answer and "
+        "explicitly note if any provider limits the returned results."
     )
 
 
@@ -50,18 +50,20 @@ class QueryAgentRun:
     messages: List[BaseMessage]
 
 
-class SemanticScholarSearchTool:
-    """LangChain tool wrapper that tracks Semantic Scholar invocations."""
+class MultiSourceSearchTool:
+    """LangChain tool wrapper that aggregates multiple scholarly providers."""
 
     def __init__(
         self,
-        client: SemanticScholarClient,
+        providers: Sequence[SearchProvider],
         console: Console,
         *,
         result_limit: int,
         max_chars: int,
     ) -> None:
-        self._client = client
+        if not providers:
+            raise ValueError("At least one search provider is required.")
+        self._providers = list(providers)
         self._console = console
         self._limit = result_limit
         self._max_chars = max_chars
@@ -74,34 +76,50 @@ class SemanticScholarSearchTool:
         self._console.print(
             Panel.fit(
                 Text(query, style="bold"),
-                title="Tool Call • Semantic Scholar Search",
+                title="Tool Call • Scholarly Search",
                 border_style="blue",
             )
         )
-        try:
-            papers = self._client.search(query, limit=self._limit)
-            formatted = format_papers(papers)
-            display = (
-                formatted
-                if len(formatted) <= self._max_chars
-                else formatted[: self._max_chars] + "… [truncated]"
+
+        provider_results: List[ProviderResult] = []
+        aggregated: List[PaperRecord] = []
+
+        for provider in self._providers:
+            try:
+                papers = provider.search(query, limit=self._limit)
+                provider_results.append(ProviderResult(provider=provider.name, papers=papers))
+                aggregated.extend(papers)
+            except Exception as error:  # pragma: no cover - provider errors depend on network
+                message = str(error) or error.__class__.__name__
+                provider_results.append(ProviderResult(provider=provider.name, papers=[], error=message))
+
+        formatted = format_provider_results(provider_results)
+        display = (
+            formatted if len(formatted) <= self._max_chars else formatted[: self._max_chars] + "… [truncated]"
+        )
+
+        self._console.print(
+            Panel.fit(
+                display,
+                title="Tool Result • Scholarly Search",
+                border_style="bright_blue",
             )
-            self._console.print(
-                Panel.fit(
-                    display,
-                    title="Tool Result • Semantic Scholar",
-                    border_style="bright_blue",
-                )
-            )
-            self.history.append({"query": query, "papers": papers})
-            return formatted
-        except SemanticScholarError as error:
-            message = f"Semantic Scholar error: {error}"
-            self._console.print(
-                Panel.fit(str(error), title="Semantic Scholar Error", border_style="red")
-            )
-            self.history.append({"query": query, "papers": [], "error": str(error)})
-            return message
+        )
+        self.history.append(
+            {
+                "query": query,
+                "papers": aggregated,
+                "providers": [
+                    {
+                        "provider": result.provider,
+                        "papers": list(result.papers),
+                        "error": result.error,
+                    }
+                    for result in provider_results
+                ],
+            }
+        )
+        return formatted
 
 
 class QueryAgent:
@@ -111,7 +129,7 @@ class QueryAgent:
         self,
         *,
         config: QueryAgentConfig,
-        client: SemanticScholarClient,
+        providers: Sequence[SearchProvider],
         console: Optional[Console] = None,
     ) -> None:
         self._console = console or Console()
@@ -121,18 +139,18 @@ class QueryAgent:
             api_key=config.api_key,
             base_url=config.base_url,
         )
-        self._search_tool = SemanticScholarSearchTool(
-            client,
+        self._search_tool = MultiSourceSearchTool(
+            providers,
             self._console,
             result_limit=config.result_limit,
             max_chars=config.max_tool_chars,
         )
         tool = Tool(
-            name="Semantic Scholar Search",
+            name="Scholarly Search",
             func=self._search_tool,
             description=(
-                "Use this tool to retrieve academic papers and metadata from Semantic Scholar. "
-                "Supports authenticated and unauthenticated modes."
+                "Use this tool to retrieve academic papers from multiple scholarly databases, including "
+                "Semantic Scholar and Google Scholar, with structured metadata."
             ),
         )
         self._agent = create_react_agent(self._llm, tools=[tool])
@@ -203,7 +221,7 @@ class QueryAgent:
         """Ask the underlying LLM for a revised search query."""
 
         prompt = (
-            "You are optimising Semantic Scholar search queries for academic research.\n"
+            "You are optimising scholarly search queries for Semantic Scholar and Google Scholar.\n"
             f"The last query was: {previous_query}\n"
             f"Feedback about the results: {feedback}\n"
             "Suggest a single improved search query string that will likely surface more relevant papers."

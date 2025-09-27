@@ -25,6 +25,7 @@ class ClassificationAgentTest(unittest.TestCase):
 
     def _make_paper(self) -> PaperRecord:
         return PaperRecord(
+            source="semantic_scholar",
             paper_id="pid",
             title="Interesting Paper",
             url="http://example.com",
@@ -58,6 +59,7 @@ class OrchestratorFeedbackTest(unittest.TestCase):
         orchestrator = SemanticScholarOrchestrator.__new__(SemanticScholarOrchestrator)
         orchestrator._console = Console(width=80)
         paper = PaperRecord(
+            source="semantic_scholar",
             paper_id="pid",
             title="Off-topic Paper",
             url=None,

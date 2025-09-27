@@ -29,7 +29,7 @@ class ClassificationResult:
 
 
 class ClassificationAgent:
-    """Agent that labels Semantic Scholar papers as strongly relevant or not."""
+    """Agent that labels scholarly papers as strongly relevant or not."""
 
     def __init__(
         self,
@@ -59,6 +59,7 @@ class ClassificationAgent:
                     (
                         "human",
                         "Research focus: {query}\n"
+                        "Source: {source}\n"
                         "Title: {title}\n"
                         "Authors: {authors}\n"
                         "Venue: {venue}\n"
@@ -81,6 +82,7 @@ class ClassificationAgent:
         raw = self._chain.invoke(
             {
                 "query": query,
+                "source": paper.source,
                 "title": paper.title,
                 "authors": ", ".join(paper.authors) or "Unknown",
                 "venue": paper.venue or "Unknown venue",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for the dual-agent Semantic Scholar workflow."""
+"""Command-line interface for the dual-agent scholarly search workflow."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from semantic_scholar import (
     QueryAgentConfig,
     SemanticScholarClient,
     SemanticScholarOrchestrator,
+    GoogleScholarClient,
 )
 
 
@@ -38,7 +39,7 @@ def ensure_env(var_name: str) -> str:
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Iteratively search Semantic Scholar and classify relevance of papers.",
+        description="Iteratively search scholarly databases and classify relevance of papers.",
     )
     parser.add_argument(
         "query",
@@ -89,6 +90,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=os.getenv("SEMANTIC_SCHOLAR_DB_PATH", "data/search_results.json"),
         help="Path to the JSON file for storing results.",
     )
+    parser.add_argument(
+        "--google-scholar-api-key",
+        default=os.getenv("GOOGLE_SCHOLAR_API_KEY") or os.getenv("SERPAPI_API_KEY"),
+        help="Optional SerpAPI key for enabling Google Scholar search.",
+    )
     return parser.parse_args(argv)
 
 
@@ -106,7 +112,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     openrouter_key = ensure_env("OPENROUTER_API_KEY")
     semantic_scholar_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
-    console.rule("Semantic Scholar Agent")
+    console.rule("Scholarly Search Agent")
     console.print(Text(f"Initial query: {initial_query}", style="bold cyan"))
     if not semantic_scholar_key:
         console.print(
@@ -116,7 +122,29 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
         )
 
-    client = SemanticScholarClient(api_key=semantic_scholar_key, default_limit=max(1, args.limit))
+    semantic_client = SemanticScholarClient(
+        api_key=semantic_scholar_key,
+        default_limit=max(1, args.limit),
+    )
+
+    providers = [semantic_client]
+
+    google_key = args.google_scholar_api_key
+    if google_key:
+        providers.append(
+            GoogleScholarClient(
+                api_key=google_key,
+                default_limit=max(1, args.limit),
+            )
+        )
+        console.print(Text("Google Scholar provider enabled via SerpAPI.", style="green"))
+    else:
+        console.print(
+            Text(
+                "No Google Scholar API key provided; continuing with Semantic Scholar only.",
+                style="yellow",
+            )
+        )
 
     query_config = QueryAgentConfig(
         model=args.model,
@@ -125,7 +153,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         base_url=args.base_url,
         result_limit=max(1, args.limit),
     )
-    query_agent = QueryAgent(config=query_config, client=client, console=console)
+    query_agent = QueryAgent(config=query_config, providers=providers, console=console)
 
     classifier_model = args.classifier_model or args.model
     classifier = ClassificationAgent(
