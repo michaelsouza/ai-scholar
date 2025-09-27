@@ -24,7 +24,7 @@ DEFAULT_PROVIDERS = [
     "anthropic",
     "google",
     "deepseek",
-    "z-ai",
+    # "z-ai",
     "qwen",
 ]
 
