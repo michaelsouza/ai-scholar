@@ -1,63 +1,56 @@
-"""SQLite persistence for Semantic Scholar agent runs."""
+"""JSON persistence for Semantic Scholar agent runs."""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from .classifier import ClassificationResult
 
-CREATE_RUNS = """
-CREATE TABLE IF NOT EXISTS search_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    query TEXT NOT NULL,
-    iteration INTEGER NOT NULL,
-    agent_summary TEXT,
-    feedback TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-"""
-
-CREATE_PAPERS = """
-CREATE TABLE IF NOT EXISTS papers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    paper_id TEXT,
-    title TEXT,
-    year INTEGER,
-    venue TEXT,
-    url TEXT,
-    authors TEXT,
-    abstract TEXT,
-    classification TEXT,
-    confidence REAL,
-    explanation TEXT,
-    raw_payload TEXT,
-    FOREIGN KEY(run_id) REFERENCES search_runs(id) ON DELETE CASCADE
-);
-"""
-
 
 class PaperDatabase:
-    """Minimal SQLite helper to persist agent runs and paper judgements."""
+    """Minimal JSON helper to persist agent runs and paper judgements."""
 
     def __init__(self, path: Path | str) -> None:
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_schema()
+        if not self._path.exists():
+            self._write({"runs": [], "papers": []})
 
     # ------------------------------------------------------------------
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._path)
+    def _read(self) -> Dict[str, Any]:
+        if not self._path.exists():  # pragma: no cover - defensive guard
+            return {"runs": [], "papers": []}
+        try:
+            data = json.loads(self._path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"PaperDatabase file {self._path} is not valid JSON. Delete or fix the file."
+            ) from exc
+        data.setdefault("runs", [])
+        data.setdefault("papers", [])
+        return data
 
-    def _ensure_schema(self) -> None:
-        with self._connect() as conn:
-            conn.execute("PRAGMA foreign_keys = ON;")
-            conn.execute(CREATE_RUNS)
-            conn.execute(CREATE_PAPERS)
+    def _write(self, payload: Dict[str, Any]) -> None:
+        self._path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _next_id(items: List[Dict[str, Any]]) -> int:
+        if not items:
+            return 1
+        return max(item.get("id", 0) for item in items) + 1
+
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+            "+00:00", "Z"
+        )
 
     # ------------------------------------------------------------------
     def log_run(
@@ -68,47 +61,58 @@ class PaperDatabase:
         agent_summary: Optional[str],
         feedback: Optional[str] = None,
     ) -> int:
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO search_runs (query, iteration, agent_summary, feedback)
-                VALUES (?, ?, ?, ?)
-                """,
-                (query, iteration, agent_summary, feedback),
-            )
-            return int(cursor.lastrowid)
+        data = self._read()
+        runs: List[Dict[str, Any]] = data["runs"]
+        run_id = self._next_id(runs)
+        runs.append(
+            {
+                "id": run_id,
+                "query": query,
+                "iteration": iteration,
+                "agent_summary": agent_summary,
+                "feedback": feedback,
+                "created_at": self._utc_now(),
+            }
+        )
+        self._write(data)
+        return run_id
 
     def store_classification(self, run_id: int, result: ClassificationResult) -> None:
         paper = result.paper
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO papers (
-                    run_id, paper_id, title, year, venue, url,
-                    authors, abstract, classification, confidence, explanation, raw_payload
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    paper.paper_id,
-                    paper.title,
-                    paper.year,
-                    paper.venue,
-                    paper.url,
-                    json.dumps(paper.authors, ensure_ascii=False),
-                    paper.abstract,
-                    result.label,
-                    result.confidence,
-                    result.explanation,
-                    json.dumps(asdict(result), ensure_ascii=False),
-                ),
-            )
+        data = self._read()
+        papers: List[Dict[str, Any]] = data["papers"]
+        paper_id = self._next_id(papers)
+        papers.append(
+            {
+                "id": paper_id,
+                "run_id": run_id,
+                "paper_id": paper.paper_id,
+                "title": paper.title,
+                "year": paper.year,
+                "venue": paper.venue,
+                "url": paper.url,
+                "authors": list(paper.authors),
+                "abstract": paper.abstract,
+                "classification": result.label,
+                "confidence": result.confidence,
+                "explanation": result.explanation,
+                "raw_payload": asdict(result),
+            }
+        )
+        self._write(data)
 
     # Convenience helpers ------------------------------------------------
     def last_runs(self, limit: int = 5) -> list[tuple]:
-        with self._connect() as conn:
-            cursor = conn.execute(
-                "SELECT id, query, iteration, agent_summary, created_at FROM search_runs ORDER BY id DESC LIMIT ?",
-                (limit,),
+        data = self._read()
+        runs = sorted(data["runs"], key=lambda item: item.get("id", 0), reverse=True)
+        trimmed = runs[:limit]
+        return [
+            (
+                entry.get("id"),
+                entry.get("query"),
+                entry.get("iteration"),
+                entry.get("agent_summary"),
+                entry.get("created_at"),
             )
-            return list(cursor.fetchall())
+            for entry in trimmed
+        ]

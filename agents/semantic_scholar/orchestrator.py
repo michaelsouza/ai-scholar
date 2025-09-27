@@ -19,7 +19,7 @@ from .storage import PaperDatabase
 @dataclass
 class OrchestratorConfig:
     max_iterations: int = 3
-    database_path: str = "data/search_results.db"
+    database_path: str = "data/search_results.json"
 
 
 class SemanticScholarOrchestrator:

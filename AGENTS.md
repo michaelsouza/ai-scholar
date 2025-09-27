@@ -6,7 +6,7 @@ The Semantic Scholar workflow now uses two specialised LangChain-based agents pl
 - `agents/semantic_scholar/search.py`: thin API client that supports authenticated and unauthenticated access, automatic pagination, and friendly formatting helpers.
 - `agents/semantic_scholar/query_agent.py`: builds a LangGraph ReAct agent around the Semantic Scholar tool. It records every tool invocation so downstream components can access raw papers.
 - `agents/semantic_scholar/classifier.py`: lightweight classification agent that labels each paper as `strong`, `partial`, or `irrelevant` and emits confidence plus rationale.
-- `agents/semantic_scholar/storage.py`: SQLite helper that persists runs and paper-level judgements.
+- `agents/semantic_scholar/storage.py`: JSON helper that persists runs and paper-level judgements.
 - `agents/semantic_scholar/orchestrator.py`: coordinates the two agents, loops through refinement iterations, and stores outputs.
 - `agents/semantic_scholar_agent.py`: CLI entry point that wires environment config, creates the agents, and boots the orchestrator.
 
@@ -40,12 +40,26 @@ Confidence is expected to land in `[0.0, 1.0]`. Out-of-range values are clamped 
 - Rich panels frame the tool call and response, truncating the display to keep the console readable without losing underlying data.
 
 ## Persistence Model
-- `search_runs` captures each iteration with query text, iteration index, optional feedback, and the query agent’s final message.
-- `papers` stores per-paper metadata, classification labels, confidence scores, explanations, and the raw dataclass snapshot as JSON.
-- `PaperDatabase` automatically initialises the schema and can be repointed via the `--db-path` flag or `SEMANTIC_SCHOLAR_DB_PATH`.
+- A single JSON document groups two arrays: `runs` summarises each iteration with query text, index, agent summary, feedback, and timestamp; `papers` stores paper-level metadata, classification labels, confidence scores, explanations, and the raw dataclass snapshot.
+- `PaperDatabase` initialises the file on first use and can be repointed via the `--db-path` flag or `SEMANTIC_SCHOLAR_DB_PATH`.
 
 ## Extensibility Notes
 - When adding new tools, extend `QueryAgent` by composing additional `Tool` instances; the orchestrator already handles arbitrary paper lists.
 - To plug in alternative classifiers (e.g., embeddings or rule-based filters), implement a drop-in replacement exposing `classify(query=..., paper=...)` that returns a `ClassificationResult`.
 - Keep refinements iterative: feed summarised feedback into `QueryAgent.suggest_refined_query` so the language model understands why prior searches failed.
 - If you need to capture extra metadata (citations, PDFs, etc.), extend `PaperRecord` and update `PaperDatabase.store_classification` to persist the new fields.
+
+## Coding Style Expectations
+- Prefer short, single-purpose modules and functions; decompose complex workflows into composable helpers inside `agents/semantic_scholar/*`.
+- Follow DRY principles by centralising shared logic (e.g., response parsing, validation) in well-named utilities instead of re-implementing them in agents.
+- Document public functions and classes with concise docstrings that state intent, inputs, and notable side effects; inline comments are reserved for non-obvious control flow.
+- Choose pragmatic design patterns (factory functions for tools, strategy-like classifier swaps) when they reduce duplication; avoid over-engineering or speculative abstractions.
+- Keep new interfaces specialised for the agents they serve and expose the minimum surface area needed for orchestration and persistence layers.
+- Maintain readability by favouring straightforward control flow over clever constructs; prefer explicit data transformations to implicit magic.
+
+## Testing and Validation
+- Add or update unit tests under `tests/` whenever agent behaviour or storage contracts change; test new edge cases introduced by refinements or tooling additions.
+- Use focused test fixtures that mirror `PaperRecord` and database schemas so regressions in metadata handling surface early.
+- Run the existing test suite (`pytest`) before shipping substantial changes and ensure optional dependencies are guarded to keep tests deterministic.
+- Validate LangChain integrations with lightweight mocks or recorded responses to avoid brittle network dependencies in CI.
+- When modifying CLI wiring, include smoke tests that cover argument parsing, environment validation, and orchestrator bootstrapping paths.

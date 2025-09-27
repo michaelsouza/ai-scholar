@@ -86,8 +86,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--db-path",
-        default=os.getenv("SEMANTIC_SCHOLAR_DB_PATH", "data/search_results.db"),
-        help="Path to the SQLite database for storing results.",
+        default=os.getenv("SEMANTIC_SCHOLAR_DB_PATH", "data/search_results.json"),
+        help="Path to the JSON file for storing results.",
     )
     return parser.parse_args(argv)
 

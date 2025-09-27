@@ -5,7 +5,7 @@ CLI utilities and modular LangChain agents for exploring academic literature wit
 ## Highlights
 - Dual-agent workflow: a query agent drives Semantic Scholar searches while a classifier judges each paper as strongly relevant, partially relevant, or irrelevant.
 - Automatic query refinement that keeps searching until a strongly relevant article is located or the iteration budget is reached.
-- Persistent SQLite database (`data/search_results.db`) records every run, query, and classification for later auditing.
+- Persistent JSON log (`data/search_results.json`) records every run, query, and classification for later auditing.
 - Semantic Scholar client supports authenticated and unauthenticated modes with pagination safeguards and Rich-powered console trace.
 
 ## Requirements
@@ -39,7 +39,7 @@ Populate a `.env` file (or export variables in your shell). The CLI loads it aut
 | `SEMANTIC_SCHOLAR_API_KEY` | No | Enables authenticated requests with higher limits.
 | `SEMANTIC_SCHOLAR_LIMIT` | No | Default result cap per query (5).
 | `SEMANTIC_SCHOLAR_MAX_ITERATIONS` | No | Default iteration budget (3).
-| `SEMANTIC_SCHOLAR_DB_PATH` | No | SQLite path for persistence (`data/search_results.db`).
+| `SEMANTIC_SCHOLAR_DB_PATH` | No | JSON path for persistence (`data/search_results.json`).
 
 ## Usage
 Run the Semantic Scholar workflow from the repository root:
@@ -52,29 +52,20 @@ Useful flags:
 - `--classifier-model`: pick a specialised classification model.
 - `--iterations`: control how many refinement rounds are allowed.
 - `--limit`: maximum papers fetched per query (default 5).
-- `--db-path`: point to an alternate SQLite database.
+- `--db-path`: point to an alternate JSON log.
 
 The CLI prints query details, every Semantic Scholar tool invocation, the query agent’s synthesis, and a Rich table of classification decisions. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
 
-## Results Database
-Results are stored in SQLite. Each run logs:
+## Results Log
+Results are stored in a human-readable JSON document. Each run logs:
 - the executed query and iteration index,
 - the query agent’s final summary,
 - every paper judged, along with label, confidence, explanation, and the raw payload.
 
-Inspect recent runs with any SQLite browser or by querying the `search_runs` and `papers` tables directly.
-
-Example CLI inspection:
+Open `data/search_results.json` in any editor or use `jq` to inspect the latest runs:
 
 ```bash
-sqlite3 data/search_results.db 'SELECT id, query, iteration, created_at FROM search_runs ORDER BY id DESC LIMIT 10;'
-```
-
-To view just the strongly relevant papers from the latest run:
-
-```bash
-sqlite3 data/search_results.db \
-  "SELECT title, classification, confidence FROM papers WHERE classification = 'strong' ORDER BY id DESC;"
+jq '.runs | sort_by(-.id)[:5]' data/search_results.json
 ```
 
 ## Troubleshooting
