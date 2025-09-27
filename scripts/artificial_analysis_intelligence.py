@@ -211,7 +211,7 @@ def export_to_excel(frame: pd.DataFrame) -> Optional[str]:
     """Persist the numeric DataFrame to an Excel workbook with a dated filename."""
 
     today = dt.datetime.now(tz=dt.timezone.utc)
-    filename = f"artificial_analysis_llm_benchmarks_{today.strftime('%Y%m%d')}.xlsx"
+    filename = f"data/artificial_analysis_llm_benchmarks_{today.strftime('%Y%m%d')}.xlsx"
     try:
         frame.to_excel(filename, index=False)
         return filename
