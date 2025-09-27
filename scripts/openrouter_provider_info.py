@@ -90,6 +90,7 @@ def collect_models(
 ) -> List[ModelInfo]:
     """Filter and transform raw models into ModelInfo records."""
 
+    print(f"from_date: {from_date}")
     provider_set = {provider.lower() for provider in providers}
     cut_off_timestamp = from_date.timestamp() if from_date else None
     collected: List[ModelInfo] = []
@@ -231,7 +232,6 @@ def render(models: Iterable[ModelInfo]) -> None:
     output_file = export_to_excel(frame)
     if output_file:
         print(f"Saved snapshot to {output_file}")
-
 
 def has_parameter(item: ModelInfo, parameter: str) -> bool:
     """Check whether a model supports a specific OpenAI-compatible parameter."""
