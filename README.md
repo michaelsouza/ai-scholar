@@ -4,6 +4,7 @@ CLI utilities and modular LangChain agents for exploring academic literature wit
 
 ## Highlights
 - Dual-agent workflow: a query agent drives Semantic Scholar searches while a classifier judges each paper as strongly relevant, partially relevant, or irrelevant.
+- Optional Google Scholar coverage via SerpAPI-backed provider to widen search results.
 - Automatic query refinement that keeps searching until a strongly relevant article is located or the iteration budget is reached.
 - Persistent JSON log (`data/search_results.json`) records every run, query, and classification for later auditing.
 - Semantic Scholar client supports authenticated and unauthenticated modes with pagination safeguards and Rich-powered console trace.
@@ -13,6 +14,7 @@ CLI utilities and modular LangChain agents for exploring academic literature wit
 - Dependencies: `langchain`, `langchain-openai`, `langgraph`, `python-dotenv`, `requests`, `rich`
 - OpenRouter account + API key (required)
 - Semantic Scholar API key (optional; unauthenticated mode is capped at 100 requests per 5 minutes)
+- SerpAPI API key (optional; enables Google Scholar results)
 
 ## Installation
 1. Clone the repository and enter the project directory.
@@ -37,7 +39,7 @@ Populate a `.env` file (or export variables in your shell). The CLI loads it aut
 | `OPENROUTER_TEMPERATURE` | No | Default temperature for the query agent (0.0).
 | `CLASSIFIER_TEMPERATURE` | No | Temperature for the classifier agent (0.0).
 | `SEMANTIC_SCHOLAR_API_KEY` | No | Enables authenticated requests with higher limits.
-| `SERPAPI_API_KEY` | No | Enables Google Scholar results through SerpAPI.
+| `SERPAPI_API_KEY` / `GOOGLE_SCHOLAR_API_KEY` | No | Enables Google Scholar results through SerpAPI.
 | `SEMANTIC_SCHOLAR_LIMIT` | No | Default result cap per query (5).
 | `SEMANTIC_SCHOLAR_MAX_ITERATIONS` | No | Default iteration budget (3).
 | `SEMANTIC_SCHOLAR_DB_PATH` | No | JSON path for persistence (`data/search_results.json`).
@@ -57,6 +59,19 @@ Useful flags:
 - `--db-path`: point to an alternate JSON log.
 
 The CLI prints query details, every Semantic Scholar or Google Scholar tool invocation, the query agent’s synthesis, and a Rich table of classification decisions. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
+
+## Testing
+Run the fast unit tests to validate the search clients and orchestrator wiring:
+
+```bash
+pytest
+```
+
+Live service smoke tests in `tests/test_live_services.py` stay skipped unless you opt in:
+- set `RUN_LIVE_API_TESTS=1` and provide the relevant API keys;
+- expect real network calls to Semantic Scholar and SerpAPI.
+
+These checks surface connectivity issues early without slowing down the default test run.
 
 ## Results Log
 Results are stored in a human-readable JSON document. Each run logs:

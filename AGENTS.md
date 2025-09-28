@@ -60,6 +60,8 @@ Confidence is expected to land in `[0.0, 1.0]`. Out-of-range values are clamped 
 - Maintain readability by favouring straightforward control flow over clever constructs; prefer explicit data transformations to implicit magic.
 
 ## Testing and Validation
+- Unit coverage: `tests/test_search_client.py` fakes both provider sessions to exercise pagination, error handling, and Google Scholar conversions without network calls.
+- Live checks: `tests/test_live_services.py` stays skipped unless `RUN_LIVE_API_TESTS=1`; supply `SEMANTIC_SCHOLAR_API_KEY` and/or `SERPAPI_API_KEY` before opting in to avoid false failures.
 - Add or update unit tests under `tests/` whenever agent behaviour or storage contracts change; test new edge cases introduced by refinements or tooling additions.
 - Use focused test fixtures that mirror `PaperRecord` and database schemas so regressions in metadata handling surface early.
 - Run the existing test suite (`pytest`) before shipping substantial changes and ensure optional dependencies are guarded to keep tests deterministic.
