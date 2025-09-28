@@ -88,6 +88,33 @@ class OrchestratorFeedbackTest(unittest.TestCase):
         self.assertIn("different domain", feedback)
         self.assertNotIn("Exactly on point", feedback)
 
+    def test_feedback_mentions_relation_context_when_available(self) -> None:
+        orchestrator = SemanticScholarOrchestrator.__new__(SemanticScholarOrchestrator)
+        orchestrator._console = Console(width=80)
+        paper = PaperRecord(
+            source="semantic_scholar",
+            paper_id="pid",
+            title="Derived Paper",
+            url=None,
+            year=None,
+            venue=None,
+            abstract=None,
+            authors=[],
+            source_query="focus",
+            relation_type="reference",
+            related_paper_id="root",
+        )
+        result = ClassificationResult(
+            paper=paper,
+            label="partial",
+            confidence=0.6,
+            explanation="Promising but missing evaluation.",
+        )
+
+        feedback = SemanticScholarOrchestrator._build_feedback(orchestrator, [result])
+
+        self.assertIn("via reference", feedback)
+
 
 if __name__ == "__main__":
     unittest.main()

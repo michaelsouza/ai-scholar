@@ -11,6 +11,7 @@ import requests
 SEMANTIC_SCHOLAR_AUTH_ENDPOINT = "https://api.semanticscholar.org/graph/v1/paper/search"
 SEMANTIC_SCHOLAR_BULK_ENDPOINT = "https://api.semanticscholar.org/graph/v1/paper/search/bulk"
 SEMANTIC_SCHOLAR_FIELDS = "paperId,title,authors.name,year,url,venue,abstract"
+SEMANTIC_SCHOLAR_RELATION_ENDPOINT = "https://api.semanticscholar.org/graph/v1/paper/{paper_id}/{relation}"
 
 
 class SemanticScholarError(RuntimeError):
@@ -30,6 +31,8 @@ class PaperRecord:
     abstract: Optional[str]
     authors: List[str]
     source_query: str
+    relation_type: Optional[str] = None
+    related_paper_id: Optional[str] = None
 
     @classmethod
     def from_semantic_scholar(cls, payload: dict, query: str) -> "PaperRecord":
@@ -153,6 +156,27 @@ class SemanticScholarClient:
         return papers
 
     # ------------------------------------------------------------------
+    def fetch_references(self, paper_id: str, *, limit: Optional[int] = None) -> List[PaperRecord]:
+        """Return papers referenced by the supplied Semantic Scholar paper."""
+
+        return self._fetch_related_papers(
+            paper_id=paper_id,
+            relation="references",
+            relation_label="reference",
+            limit=limit,
+        )
+
+    def fetch_citations(self, paper_id: str, *, limit: Optional[int] = None) -> List[PaperRecord]:
+        """Return papers that cite the supplied Semantic Scholar paper."""
+
+        return self._fetch_related_papers(
+            paper_id=paper_id,
+            relation="citations",
+            relation_label="citation",
+            limit=limit,
+        )
+
+    # ------------------------------------------------------------------
     # Authenticated search
     # ------------------------------------------------------------------
     def _search_auth(self, query: str, limit: int) -> List[dict]:
@@ -225,6 +249,63 @@ class SemanticScholarClient:
                 break
 
         return accumulated[:limit]
+
+    # ------------------------------------------------------------------
+    def _fetch_related_papers(
+        self,
+        *,
+        paper_id: str,
+        relation: str,
+        relation_label: str,
+        limit: Optional[int] = None,
+    ) -> List[PaperRecord]:
+        paper_id = paper_id.strip()
+        if not paper_id:
+            raise ValueError("A valid Semantic Scholar paper_id is required to fetch related papers.")
+
+        limit = limit or self.default_limit
+        limit = max(1, limit)
+
+        url = SEMANTIC_SCHOLAR_RELATION_ENDPOINT.format(paper_id=paper_id, relation=relation)
+        params = {
+            "fields": SEMANTIC_SCHOLAR_FIELDS,
+            "limit": limit,
+        }
+        headers = {"x-api-key": self.api_key} if self.api_key else None
+
+        try:
+            response = self.session.get(url, params=params, headers=headers, timeout=self.timeout)
+        except requests.RequestException as err:  # pragma: no cover - passthrough network errors
+            raise SemanticScholarError(f"Semantic Scholar request failed: {err}") from err
+
+        if response.status_code == 429:
+            raise SemanticScholarError(
+                "Semantic Scholar rate limit hit when fetching related papers."
+            )
+        if response.status_code != 200:
+            raise SemanticScholarError(
+                f"Semantic Scholar error {response.status_code}: {response.text}"
+            )
+
+        payload = response.json()
+        records: List[PaperRecord] = []
+        for item in payload.get("data", []):
+            paper_payload = (
+                item.get("citedPaper")
+                or item.get("citingPaper")
+                or item
+            )
+            if not isinstance(paper_payload, dict):
+                continue
+            record = PaperRecord.from_semantic_scholar(
+                paper_payload,
+                query=f"{relation}:{paper_id}",
+            )
+            record.relation_type = relation_label
+            record.related_paper_id = paper_id
+            records.append(record)
+
+        return records[:limit]
 
     # ------------------------------------------------------------------
     def as_json(self, papers: Iterable[PaperRecord]) -> str:

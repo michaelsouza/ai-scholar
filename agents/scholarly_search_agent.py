@@ -19,6 +19,8 @@ from semantic_scholar import (
     PaperDatabase,
     QueryAgent,
     QueryAgentConfig,
+    RelatedPaperHarvester,
+    RelatedPaperHarvesterConfig,
     SemanticScholarClient,
     SemanticScholarOrchestrator,
 )
@@ -89,6 +91,22 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--db-path",
         default=os.getenv("SEMANTIC_SCHOLAR_DB_PATH", "data/search_results.json"),
         help="Path to the JSON file for storing results.",
+    )
+    parser.add_argument(
+        "--related-limit",
+        type=int,
+        default=int(os.getenv("SEMANTIC_SCHOLAR_RELATED_LIMIT", "3")),
+        help="Maximum references/citations to fetch per seed paper when expansion is enabled (default: 3).",
+    )
+    parser.add_argument(
+        "--include-citations",
+        action="store_true",
+        help="Include citation harvesting alongside references during related-paper expansion.",
+    )
+    parser.add_argument(
+        "--no-related-expansion",
+        action="store_true",
+        help="Disable related-paper expansion via Semantic Scholar references/citations.",
     )
     parser.add_argument(
         "--serpapi-api-key",
@@ -169,12 +187,24 @@ def main(argv: Sequence[str] | None = None) -> None:
     db_path = Path(args.db_path)
     database = PaperDatabase(db_path)
 
+    harvester = None
+    if not args.no_related_expansion:
+        harvester = RelatedPaperHarvester(
+            client=semantic_client,
+            console=console,
+            config=RelatedPaperHarvesterConfig(
+                include_citations=args.include_citations,
+                max_per_relation=max(1, args.related_limit),
+            ),
+        )
+
     orchestrator = SemanticScholarOrchestrator(
         query_agent=query_agent,
         classifier=classifier,
         database=database,
         console=console,
         config=OrchestratorConfig(max_iterations=max(1, args.iterations)),
+        harvester=harvester,
     )
     orchestrator.run(initial_query)
 

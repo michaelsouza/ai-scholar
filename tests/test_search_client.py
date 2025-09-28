@@ -121,6 +121,60 @@ class SemanticScholarClientTest(unittest.TestCase):
 
         self.assertIn("rate limit", str(ctx.exception).lower())
 
+    def test_fetch_references_returns_related_records(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "citedPaper": {
+                        "paperId": "ref-1",
+                        "title": "Reference Paper",
+                        "authors": [{"name": "Alan"}],
+                        "year": 2020,
+                        "venue": "Journal",
+                        "url": "http://example.com/ref",
+                    }
+                }
+            ]
+        }
+        session = FakeSession([FakeResponse(json_data=payload)])
+        client = SemanticScholarClient(api_key="secret", session=session)
+
+        results = client.fetch_references("root-id", limit=5)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].relation_type, "reference")
+        self.assertEqual(results[0].related_paper_id, "root-id")
+        self.assertEqual(results[0].source_query, "references:root-id")
+        self.assertIn("/paper/root-id/references", session.calls[0]["url"])
+
+    def test_fetch_citations_returns_related_records(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "citingPaper": {
+                        "paperId": "cit-1",
+                        "title": "Citing Paper",
+                        "authors": [{"name": "Alan"}],
+                    }
+                }
+            ]
+        }
+        session = FakeSession([FakeResponse(json_data=payload)])
+        client = SemanticScholarClient(api_key=None, session=session)
+
+        results = client.fetch_citations("root-id", limit=3)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].relation_type, "citation")
+        self.assertEqual(results[0].related_paper_id, "root-id")
+        self.assertEqual(results[0].paper_id, "cit-1")
+
+    def test_fetch_related_requires_paper_id(self) -> None:
+        client = SemanticScholarClient(api_key=None)
+
+        with self.assertRaises(ValueError):
+            client.fetch_references("  ")
+
 
 class GoogleScholarClientTest(unittest.TestCase):
     def test_google_scholar_converts_results(self) -> None:

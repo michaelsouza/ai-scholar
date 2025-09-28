@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .classifier import ClassificationAgent, ClassificationResult
+from .harvest import RelatedPaperHarvester
 from .query_agent import QueryAgent
 from .search import PaperRecord
 from .storage import PaperDatabase
@@ -33,12 +34,14 @@ class SemanticScholarOrchestrator:
         database: PaperDatabase,
         console: Optional[Console] = None,
         config: Optional[OrchestratorConfig] = None,
+        harvester: Optional[RelatedPaperHarvester] = None,
     ) -> None:
         self._console = console or Console()
         self._query_agent = query_agent
         self._classifier = classifier
         self._database = database
         self._config = config or OrchestratorConfig()
+        self._harvester = harvester
 
     # ------------------------------------------------------------------
     def run(self, initial_query: str) -> None:
@@ -46,6 +49,7 @@ class SemanticScholarOrchestrator:
 
         query = initial_query.strip()
         feedback: Optional[str] = None
+        seen_paper_ids: set[str] = set()
 
         for iteration in range(1, self._config.max_iterations + 1):
             self._console.rule(Text(f"Iteration {iteration}", style="bold magenta"))
@@ -58,7 +62,8 @@ class SemanticScholarOrchestrator:
                 )
             )
 
-            classifications = self._classify_papers(query, agent_run.papers)
+            new_papers = self._filter_new_papers(agent_run.papers, seen_paper_ids)
+            classifications = self._classify_papers(query, new_papers)
             run_id = self._database.log_run(
                 query=query,
                 iteration=iteration,
@@ -68,7 +73,39 @@ class SemanticScholarOrchestrator:
             for result in classifications:
                 self._database.store_classification(run_id, result)
 
-            if any(result.is_strong for result in classifications):
+            all_results = list(classifications)
+
+            if self._harvester and classifications:
+                label_map = {
+                    result.paper.paper_id: result.label
+                    for result in classifications
+                    if result.paper.paper_id
+                }
+                related_candidates = self._harvester.harvest(
+                    papers=[result.paper for result in classifications],
+                    labels=label_map,
+                    seen_ids=seen_paper_ids,
+                )
+                related_candidates = self._filter_new_papers(related_candidates, seen_paper_ids)
+
+                if related_candidates:
+                    self._console.print(
+                        Panel.fit(
+                            "Exploring references/citations for promising papers.",
+                            title="Relationship Expansion",
+                            border_style="blue",
+                        )
+                    )
+                    derived_results = self._classify_papers(
+                        query,
+                        related_candidates,
+                        heading="Derived Classification Results",
+                    )
+                    for result in derived_results:
+                        self._database.store_classification(run_id, result)
+                    all_results.extend(derived_results)
+
+            if any(result.is_strong for result in all_results):
                 self._console.print(
                     Panel.fit(
                         "Strongly relevant paper(s) found. Stopping iterations.",
@@ -77,7 +114,7 @@ class SemanticScholarOrchestrator:
                 )
                 break
 
-            feedback = self._build_feedback(classifications)
+            feedback = self._build_feedback(all_results)
             if not feedback:
                 self._console.print(
                     Panel.fit(
@@ -111,7 +148,13 @@ class SemanticScholarOrchestrator:
             query = refined_query
 
     # ------------------------------------------------------------------
-    def _classify_papers(self, query: str, papers: Iterable[PaperRecord]) -> List[ClassificationResult]:
+    def _classify_papers(
+        self,
+        query: str,
+        papers: Iterable[PaperRecord],
+        *,
+        heading: str = "Classification Results",
+    ) -> List[ClassificationResult]:
         papers = list(papers)
         if not papers:
             self._console.print(
@@ -119,7 +162,7 @@ class SemanticScholarOrchestrator:
             )
             return []
 
-        table = Table(title="Classification Results", show_lines=False)
+        table = Table(title=heading, show_lines=False)
         table.add_column("Title", style="bold", overflow="fold")
         table.add_column("Source", style="blue")
         table.add_column("Label", style="cyan")
@@ -130,8 +173,11 @@ class SemanticScholarOrchestrator:
         for paper in papers:
             result = self._classifier.classify(query=query, paper=paper)
             results.append(result)
+            title = paper.title
+            if paper.relation_type:
+                title = f"{title} [{paper.relation_type}]"
             table.add_row(
-                paper.title,
+                title,
                 paper.source,
                 result.label,
                 f"{result.confidence:.2f}",
@@ -141,13 +187,29 @@ class SemanticScholarOrchestrator:
         self._console.print(table)
         return results
 
+    def _filter_new_papers(
+        self, papers: Iterable[PaperRecord], seen_ids: set[str]
+    ) -> List[PaperRecord]:
+        fresh: List[PaperRecord] = []
+        for paper in papers:
+            identifier = paper.paper_id
+            if identifier and identifier in seen_ids:
+                continue
+            if identifier:
+                seen_ids.add(identifier)
+            fresh.append(paper)
+        return fresh
+
     def _build_feedback(self, results: Iterable[ClassificationResult]) -> str:
         lines = []
         for result in results:
             if result.is_strong:
                 continue
+            relation_hint = ""
+            if result.paper.relation_type:
+                relation_hint = f" via {result.paper.relation_type}"
             lines.append(
-                f"Paper '{result.paper.title}' from {result.paper.source} classified as {result.label} "
+                f"Paper '{result.paper.title}' from {result.paper.source}{relation_hint} classified as {result.label} "
                 f"(confidence {result.confidence:.2f}). "
                 f"Rationale: {result.explanation}"
             )

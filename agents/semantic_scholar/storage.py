@@ -82,25 +82,28 @@ class PaperDatabase:
         data = self._read()
         papers: List[Dict[str, Any]] = data["papers"]
         paper_id = self._next_id(papers)
-        papers.append(
-            {
-                "id": paper_id,
-                "run_id": run_id,
-                "paper_id": paper.paper_id,
-                "source": paper.source,
-                "title": paper.title,
-                "year": paper.year,
-                "venue": paper.venue,
-                "url": paper.url,
-                "authors": list(paper.authors),
-                "abstract": paper.abstract,
-                "source_query": paper.source_query,
-                "classification": result.label,
-                "confidence": result.confidence,
-                "explanation": result.explanation,
-                "raw_payload": asdict(result),
-            }
-        )
+        entry = {
+            "id": paper_id,
+            "run_id": run_id,
+            "paper_id": paper.paper_id,
+            "source": paper.source,
+            "title": paper.title,
+            "year": paper.year,
+            "venue": paper.venue,
+            "url": paper.url,
+            "authors": list(paper.authors),
+            "abstract": paper.abstract,
+            "source_query": paper.source_query,
+            "classification": result.label,
+            "confidence": result.confidence,
+            "explanation": result.explanation,
+            "raw_payload": asdict(result),
+        }
+        if paper.relation_type:
+            entry["relation_type"] = paper.relation_type
+        if paper.related_paper_id:
+            entry["related_paper_id"] = paper.related_paper_id
+        papers.append(entry)
         self._write(data)
 
     # Convenience helpers ------------------------------------------------

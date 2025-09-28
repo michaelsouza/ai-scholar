@@ -6,6 +6,7 @@ CLI utilities and modular LangChain agents for exploring academic literature wit
 - Dual-agent workflow: a query agent drives Semantic Scholar searches while a classifier judges each paper as strongly relevant, partially relevant, or irrelevant.
 - Optional Google Scholar coverage via SerpAPI-backed provider to widen search results.
 - Automatic query refinement that keeps searching until a strongly relevant article is located or the iteration budget is reached.
+- Relationship expansion that follows Semantic Scholar references (and optional citations) to surface additional leads from promising papers.
 - Persistent JSON log (`data/search_results.json`) records every run, query, and classification for later auditing.
 - Semantic Scholar client supports authenticated and unauthenticated modes with pagination safeguards and Rich-powered console trace.
 
@@ -43,6 +44,7 @@ Populate a `.env` file (or export variables in your shell). The CLI loads it aut
 | `SEMANTIC_SCHOLAR_LIMIT` | No | Default result cap per query (5).
 | `SEMANTIC_SCHOLAR_MAX_ITERATIONS` | No | Default iteration budget (3).
 | `SEMANTIC_SCHOLAR_DB_PATH` | No | JSON path for persistence (`data/search_results.json`).
+| `SEMANTIC_SCHOLAR_RELATED_LIMIT` | No | Default number of references/citations pulled per seed paper (3).
 
 ## Usage
 Run the scholarly search workflow from the repository root:
@@ -57,8 +59,11 @@ Useful flags:
 - `--iterations`: control how many refinement rounds are allowed.
 - `--limit`: maximum papers fetched per query (default 5).
 - `--db-path`: point to an alternate JSON log.
+- `--related-limit`: cap how many references/citations are harvested per promising paper (default 3).
+- `--include-citations`: expand discovery with citing papers in addition to references.
+- `--no-related-expansion`: skip the relationship expansion step entirely.
 
-The CLI prints query details, every Semantic Scholar or Google Scholar tool invocation, the query agent’s synthesis, and a Rich table of classification decisions. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
+The CLI prints query details, every Semantic Scholar or Google Scholar tool invocation, the query agent’s synthesis, and Rich tables of classification decisions. When enabled (default), the workflow also explores references—and optionally citations—for partially relevant papers before moving on. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
 
 ## Testing
 Run the fast unit tests to validate the search clients and orchestrator wiring:

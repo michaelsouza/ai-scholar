@@ -1,6 +1,7 @@
 """Semantic Scholar agent toolkit."""
 
 from .classifier import ClassificationAgent, ClassificationResult
+from .harvest import RelatedPaperHarvester, RelatedPaperHarvesterConfig
 from .orchestrator import OrchestratorConfig, SemanticScholarOrchestrator
 from .query_agent import QueryAgent, QueryAgentConfig
 from .storage import PaperDatabase
@@ -18,4 +19,6 @@ __all__ = [
     "SemanticScholarClient",
     "GoogleScholarClient",
     "PaperRecord",
+    "RelatedPaperHarvester",
+    "RelatedPaperHarvesterConfig",
 ]

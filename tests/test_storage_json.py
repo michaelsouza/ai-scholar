@@ -68,6 +68,31 @@ class PaperDatabaseTest(unittest.TestCase):
         self.assertEqual(paper_entry["raw_payload"]["label"], "partial")
         self.assertEqual(paper_entry["source"], "semantic_scholar")
         self.assertEqual(paper_entry["source_query"], "graph neural networks")
+        self.assertNotIn("relation_type", paper_entry)
+        self.assertNotIn("related_paper_id", paper_entry)
+
+    def test_store_classification_includes_relation_metadata_when_available(self) -> None:
+        run_id = self.database.log_run(
+            query="graph neural networks",
+            iteration=1,
+            agent_summary="Summary",
+            feedback=None,
+        )
+        paper = self._paper()
+        paper.relation_type = "reference"
+        paper.related_paper_id = "root-1"
+        result = ClassificationResult(
+            paper=paper,
+            label="partial",
+            confidence=0.55,
+            explanation="Promising but off-topic.",
+        )
+        self.database.store_classification(run_id, result)
+
+        payload = json.loads(self.db_path.read_text())
+        paper_entry = payload["papers"][0]
+        self.assertEqual(paper_entry["relation_type"], "reference")
+        self.assertEqual(paper_entry["related_paper_id"], "root-1")
 
     def test_last_runs_returns_recent_entries(self) -> None:
         for iteration in range(1, 4):
