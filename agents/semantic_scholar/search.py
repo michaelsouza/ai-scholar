@@ -31,6 +31,8 @@ class PaperRecord:
     abstract: Optional[str]
     authors: List[str]
     source_query: str
+    citation_count: Optional[int] = None
+    reference_count: Optional[int] = None
     relation_type: Optional[str] = None
     related_paper_id: Optional[str] = None
 

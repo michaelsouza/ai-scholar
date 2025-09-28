@@ -83,16 +83,22 @@ class GoogleScholarClient:
         venue = publication.get("summary") or publication.get("venue")
         year = self._parse_year(publication.get("summary"))
 
+        if "inline_links" in payload and "cited_by" in payload["inline_links"]:
+            citation_count = payload["inline_links"]["cited_by"].get("total")
+        else:
+            citation_count = None
+
         return PaperRecord(
             source="google_scholar",
-            paper_id=payload.get("result_id") or payload.get("link"),
-            title=payload.get("title") or "Untitled",
+            paper_id=payload.get("result_id"),
+            title=payload.get("title", "No Title"),
             url=payload.get("link"),
             year=year,
             venue=venue,
             abstract=payload.get("snippet"),
             authors=authors,
             source_query=query,
+            citation_count=citation_count,
         )
 
     @staticmethod
