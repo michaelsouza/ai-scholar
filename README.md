@@ -83,10 +83,10 @@ To run them, create a `.env` file in the project root (if you haven't already) a
 - **`test_search_client.py`**: Unit tests for the `SemanticScholarClient` and `GoogleScholarClient`, using mock network sessions.
 - **`test_related_harvester.py`**: Unit tests for the logic of finding related papers (references and citations).
 - **`test_storage_json.py`**: Tests the `PaperDatabase` class for logging results to a JSON file.
-- **`test_arxiv_library_usage.py`**: Live integration tests for the arXiv API, verifying searches and metadata parsing, including abstracts.
-- **`test_google_scholar_api_usage.py`**: Live integration tests for Google Scholar via SerpAPI. Checks search functionality and parsing of key metadata like abstracts and citation counts.
-- **`test_openalex_api_usage.py`**: Live integration tests for the OpenAlex API. Validates metadata fetching, including abstracts, citation counts, and references.
-- **`test_semanticscholar_library_usage.py`**: Live integration test for the `semanticscholar` library. Retrieves a known paper to validate all its core metadata (abstract, citation/reference counts) and relations (citations/references).
+- **`test_usage_arxiv_library.py`**: Live integration tests for the arXiv API, verifying searches and metadata parsing, including abstracts.
+- **`test_usage_google_scholar_api.py`**: Live integration tests for Google Scholar via SerpAPI. Checks search functionality and parsing of key metadata like abstracts and citation counts.
+- **`test_usage_openalex_api.py`**: Live integration tests for the OpenAlex API. Validates metadata fetching, including abstracts, citation counts, and references.
+- **`test_usage_semanticscholar_library.py`**: Live integration test for the `semanticscholar` library. Retrieves a known paper to validate all its core metadata (abstract, citation/reference counts) and relations (citations/references).
 - **`test_live_services.py`**: Simple "smoke tests" that check the availability of the core external services.
 
 ## Results Log

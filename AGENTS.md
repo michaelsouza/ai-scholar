@@ -63,7 +63,7 @@ Confidence is expected to land in `[0.0, 1.0]`. Out-of-range values are clamped 
 The project contains a comprehensive test suite in the `tests/` directory, separating fast unit tests from slower, network-dependent integration tests.
 
 - **Unit & Component Tests**: Files like `test_agents_logic.py`, `test_search_client.py`, and `test_storage_json.py` validate the core internal logic. They use mocks and fake clients to ensure components work correctly in isolation.
-- **Live Integration Tests**: Files ending in `_usage.py` (e.g., `test_google_scholar_api_usage.py`) and `test_live_services.py` perform real network calls to external APIs. They verify that the clients can handle live API responses and parse key metadata, including abstracts, citation counts, and references.
+- **Live Integration Tests**: Files ending in `_usage.py` (e.g., `test_usage_google_scholar_api.py`) and `test_live_services.py` perform real network calls to external APIs. They verify that the clients can handle live API responses and parse key metadata, including abstracts, citation counts, and references.
 - **Running Tests**:
   - `pytest` runs only the fast unit tests by default.
   - To run the live integration tests, create a `.env` file with `RUN_LIVE_API_TESTS=1` and the required API keys. The test suite, via `tests/conftest.py`, will automatically detect this file and enable the live tests.
