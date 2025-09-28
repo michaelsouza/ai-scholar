@@ -9,7 +9,7 @@ The Semantic Scholar workflow now uses two specialised LangChain-based agents pl
 - `agents/semantic_scholar/classifier.py`: lightweight classification agent that labels each paper as `strong`, `partial`, or `irrelevant` and emits confidence plus rationale.
 - `agents/semantic_scholar/storage.py`: JSON helper that persists runs and paper-level judgements.
 - `agents/semantic_scholar/orchestrator.py`: coordinates the two agents, loops through refinement iterations, and stores outputs.
-- `agents/semantic_scholar_agent.py`: CLI entry point that wires environment config, creates the agents, and boots the orchestrator.
+- `agents/scholarly_search_agent.py`: CLI entry point that wires environment config, creates the agents, and boots the orchestrator.
 
 ## Execution Flow
 1. CLI loads `.env`, validates `OPENROUTER_API_KEY`, warns if Semantic Scholar or Google Scholar keys are absent, and instantiates the available provider clients.

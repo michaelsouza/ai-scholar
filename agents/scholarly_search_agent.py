@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for the dual-agent scholarly search workflow."""
+"""CLI for orchestrating Semantic Scholar and SerpAPI-powered scholarly search."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from rich.text import Text
 
 from semantic_scholar import (
     ClassificationAgent,
+    GoogleScholarClient,
     OrchestratorConfig,
     PaperDatabase,
     QueryAgent,
     QueryAgentConfig,
     SemanticScholarClient,
     SemanticScholarOrchestrator,
-    GoogleScholarClient,
 )
 
 
@@ -91,9 +91,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Path to the JSON file for storing results.",
     )
     parser.add_argument(
+        "--serpapi-api-key",
         "--google-scholar-api-key",
-        default=os.getenv("GOOGLE_SCHOLAR_API_KEY") or os.getenv("SERPAPI_API_KEY"),
-        help="Optional SerpAPI key for enabling Google Scholar search.",
+        dest="serpapi_api_key",
+        default=os.getenv("SERPAPI_API_KEY") or os.getenv("GOOGLE_SCHOLAR_API_KEY"),
+        help="SerpAPI key for enabling Google Scholar search (alias: --google-scholar-api-key).",
     )
     return parser.parse_args(argv)
 
@@ -112,7 +114,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     openrouter_key = ensure_env("OPENROUTER_API_KEY")
     semantic_scholar_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
-    console.rule("Scholarly Search Agent")
+    console.rule("Scholarly Search Agents")
     console.print(Text(f"Initial query: {initial_query}", style="bold cyan"))
     if not semantic_scholar_key:
         console.print(
@@ -129,11 +131,11 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     providers = [semantic_client]
 
-    google_key = args.google_scholar_api_key
-    if google_key:
+    serpapi_key = args.serpapi_api_key
+    if serpapi_key:
         providers.append(
             GoogleScholarClient(
-                api_key=google_key,
+                api_key=serpapi_key,
                 default_limit=max(1, args.limit),
             )
         )
@@ -141,7 +143,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     else:
         console.print(
             Text(
-                "No Google Scholar API key provided; continuing with Semantic Scholar only.",
+                "No SerpAPI key provided; continuing with Semantic Scholar only.",
                 style="yellow",
             )
         )

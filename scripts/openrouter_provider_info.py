@@ -244,7 +244,7 @@ def format_price(value: Optional[Decimal]) -> str:
 
     if value is None or pd.isna(value):
         return "-"
-    return f"${value:.3f}"
+    return f"{value:.3f}"
 
 
 def format_context(value: Optional[int]) -> str:

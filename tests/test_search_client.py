@@ -165,6 +165,19 @@ class GoogleScholarClientTest(unittest.TestCase):
 
         self.assertIn("invalid api key", str(ctx.exception).lower())
 
+    def test_google_scholar_invalid_api_key_status_code(self) -> None:
+        session = FakeSession([
+            FakeResponse(status_code=401, text='{"error": "Invalid API key"}')
+        ])
+        client = GoogleScholarClient(api_key="serp", session=session)
+
+        with self.assertRaises(GoogleScholarError) as ctx:
+            client.search("graph neural networks")
+
+        message = str(ctx.exception)
+        self.assertIn("401", message)
+        self.assertIn("Invalid API key", message)
+
 
 if __name__ == "__main__":
     unittest.main()

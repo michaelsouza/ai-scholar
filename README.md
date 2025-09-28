@@ -37,24 +37,26 @@ Populate a `.env` file (or export variables in your shell). The CLI loads it aut
 | `OPENROUTER_TEMPERATURE` | No | Default temperature for the query agent (0.0).
 | `CLASSIFIER_TEMPERATURE` | No | Temperature for the classifier agent (0.0).
 | `SEMANTIC_SCHOLAR_API_KEY` | No | Enables authenticated requests with higher limits.
+| `SERPAPI_API_KEY` | No | Enables Google Scholar results through SerpAPI.
 | `SEMANTIC_SCHOLAR_LIMIT` | No | Default result cap per query (5).
 | `SEMANTIC_SCHOLAR_MAX_ITERATIONS` | No | Default iteration budget (3).
 | `SEMANTIC_SCHOLAR_DB_PATH` | No | JSON path for persistence (`data/search_results.json`).
 
 ## Usage
-Run the Semantic Scholar workflow from the repository root:
+Run the scholarly search workflow from the repository root:
 
 ```bash
-python agents/semantic_scholar_agent.py "retrieval augmented generation"
+python agents/scholarly_search_agent.py "retrieval augmented generation"
 ```
 
 Useful flags:
+- `--serpapi-api-key`: supply a SerpAPI key to include Google Scholar alongside Semantic Scholar (alias: --google-scholar-api-key).
 - `--classifier-model`: pick a specialised classification model.
 - `--iterations`: control how many refinement rounds are allowed.
 - `--limit`: maximum papers fetched per query (default 5).
 - `--db-path`: point to an alternate JSON log.
 
-The CLI prints query details, every Semantic Scholar tool invocation, the query agent’s synthesis, and a Rich table of classification decisions. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
+The CLI prints query details, every Semantic Scholar or Google Scholar tool invocation, the query agent’s synthesis, and a Rich table of classification decisions. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
 
 ## Results Log
 Results are stored in a human-readable JSON document. Each run logs:
