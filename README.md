@@ -66,17 +66,32 @@ Useful flags:
 The CLI prints query details, every Semantic Scholar or Google Scholar tool invocation, the query agent’s synthesis, and Rich tables of classification decisions. When enabled (default), the workflow also explores references—and optionally citations—for partially relevant papers before moving on. Iterations continue until a “strong” hit appears or the iteration budget is exhausted.
 
 ## Testing
-Run the fast unit tests to validate the search clients and orchestrator wiring:
+The project includes a comprehensive test suite in the `tests/` directory.
 
+To run the fast unit tests, which validate local logic and client wiring without network calls, use:
 ```bash
 pytest
 ```
 
-Live service smoke tests in `tests/test_live_services.py` stay skipped unless you opt in:
-- set `RUN_LIVE_API_TESTS=1` and provide the relevant API keys;
-- expect real network calls to Semantic Scholar and SerpAPI.
+### Live Integration Tests
+The suite also includes tests that interact with live external APIs (Semantic Scholar, Google Scholar/SerpAPI, arXiv, OpenAlex) to ensure integrations are working correctly. These are skipped by default to keep the standard test run fast and reliable.
 
-These checks surface connectivity issues early without slowing down the default test run.
+To run them, set the `RUN_LIVE_API_TESTS=1` environment variable and ensure the necessary API keys (`SEMANTIC_SCHOLAR_API_KEY`, `SERPAPI_API_KEY`) are configured in your `.env` file.
+
+```bash
+RUN_LIVE_API_TESTS=1 pytest
+```
+
+### Test Suite Structure
+- **`test_agents_logic.py`**: Unit tests for the internal logic of the classification and orchestration agents. It verifies that agents correctly process simulated model outputs and build feedback summaries.
+- **`test_search_client.py`**: Unit tests for the `SemanticScholarClient` and `GoogleScholarClient`. These tests use mock network sessions to ensure that API requests are built correctly and that responses are parsed as expected, without making real network calls.
+- **`test_related_harvester.py`**: Unit tests for the `RelatedPaperHarvester`, which is responsible for finding related papers (references and citations). It uses a stub client to test the harvesting logic in isolation.
+- **`test_storage_json.py`**: Tests the `PaperDatabase` class, ensuring that search runs and classification results are correctly logged to the JSON database file.
+- **`test_arxiv_library_usage.py`**: Live integration tests for the arXiv API. These tests verify that keyword searches, ID lookups, and author queries work correctly against the live service.
+- **`test_google_scholar_api_usage.py`**: Live integration tests for the Google Scholar search via SerpAPI. It checks search functionality, result limiting, and data parsing.
+- **`test_openalex_api_usage.py`**: Live integration tests for the OpenAlex API, covering keyword and author searches, DOI lookups, and validation of response data.
+- **`test_semanticscholar_library_usage.py`**: Tests the direct usage of the `semanticscholar` library, including a live test to retrieve a known paper.
+- **`test_live_services.py`**: Contains simple "smoke tests" that check the availability of the core external services (Semantic Scholar and SerpAPI).
 
 ## Results Log
 Results are stored in a human-readable JSON document. Each run logs:
