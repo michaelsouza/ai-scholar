@@ -58,6 +58,9 @@ def test_arxiv_fetch_specific_work_by_id(arxiv_client: arxiv.Client):
     paper = results[0]
     assert target_id in paper.get_short_id()
     assert "attention" in paper.title.lower()
+    assert paper.summary  # Abstract
+
+    # Note: The arxiv API itself does not provide citation/reference counts.
 
 
 def test_arxiv_returns_authors_for_author_query(arxiv_client: arxiv.Client):

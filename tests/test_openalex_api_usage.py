@@ -68,28 +68,39 @@ def test_openalex_keyword_search_returns_results():
 
 
 @pytest.mark.usefixtures("openalex_enabled")
-def test_openalex_work_includes_references_and_citations():
+def test_openalex_work_includes_metadata_references_and_citations():
     work_id = "W2002097905"  # Moderately cited work with stable metadata
     payload = _get(f"/works/{work_id}", context="work lookup")
 
     work_identifier = payload.get("id", "")
     assert work_identifier.endswith(work_id)
+
+    # Metadata checks
+    assert payload.get("title")
+    assert isinstance(payload.get("cited_by_count"), int) and payload.get("cited_by_count") >= 0
+
+    # References
     references = payload.get("referenced_works", [])
     assert isinstance(references, list)
     assert references, "Expected at least one referenced work"
 
+    # Citations
+    # To get works that cite this one, we filter for works that have this ID in their reference list.
     citations_payload = _get(
         "/works",
-        params={"filter": f"cited_by:{work_id}", "per-page": 5},
+        params={"filter": f"referenced_works:{work_id}", "per-page": 5},
         context="citations lookup",
     )
     cited_by = citations_payload.get("results", [])
     if not cited_by:
         meta_count = citations_payload.get("meta", {}).get("count")
-        pytest.skip(
-            "OpenAlex cited_by filter returned no citing works; "
-            f"meta.count={meta_count}."
-        )
+        if meta_count is not None and meta_count < 1000:
+            pytest.skip(
+                "OpenAlex referenced_works filter returned no citing works, and meta count is low; "
+                f"meta.count={meta_count} for {work_id}."
+            )
+        pytest.fail(f"OpenAlex referenced_works filter returned no results for {work_id}")
+
     citing_titles = [item.get("title") for item in cited_by]
     assert any(citing_titles), "Citing works missing titles"
 
@@ -149,7 +160,7 @@ def test_openalex_select_fields_limits_payload():
         "/works",
         params={
             "filter": "title.search:graph neural networks",
-            "select": "id,title,publication_date,cited_by_count",
+            "select": "id,title,publication_date,cited_by_count,abstract_inverted_index",
             "per-page": 3,
         },
         context="field selection",
@@ -158,9 +169,10 @@ def test_openalex_select_fields_limits_payload():
     works = payload.get("results", [])
     assert works, "Expected results when selecting fields"
 
-    allowed_keys = {"id", "title", "publication_date", "cited_by_count"}
+    allowed_keys = {"id", "title", "publication_date", "cited_by_count", "abstract_inverted_index"}
     for work in works:
         work_keys = set(work.keys())
+        assert "abstract_inverted_index" in work_keys
         assert work_keys <= allowed_keys, (
             "OpenAlex returned unexpected fields when select parameter was applied. "
             f"Unexpected keys: {sorted(work_keys - allowed_keys)}"

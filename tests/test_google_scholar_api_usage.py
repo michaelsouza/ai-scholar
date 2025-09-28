@@ -89,6 +89,26 @@ def test_google_scholar_provides_reasonable_years(google_scholar_client: GoogleS
         pytest.skip("No Google Scholar results included a publication year to validate")
 
 
+@pytest.mark.usefixtures("google_scholar_client")
+def test_google_scholar_fetches_metadata_for_specific_paper(google_scholar_client: GoogleScholarClient):
+    # Use a well-known, highly cited paper with a distinctive title.
+    query = '"Attention Is All You Need" Vaswani'
+    papers = _run_search(
+        google_scholar_client,
+        query,
+        limit=1,
+        context="metadata fetch",
+    )
+    if not papers:
+        pytest.skip("Google Scholar returned no results for the metadata fetch query")
+
+    paper = papers[0]
+    assert "attention is all you need" in paper.title.lower()
+    assert paper.abstract
+    assert paper.citation_count is not None
+    assert paper.citation_count > 10000  # Check for a plausible, large number of citations
+
+
 def test_google_scholar_requires_api_key():
     client = GoogleScholarClient(api_key=None)
     with pytest.raises(GoogleScholarError) as excinfo:

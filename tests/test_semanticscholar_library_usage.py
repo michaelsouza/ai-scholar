@@ -97,18 +97,44 @@ def test_get_papers_accepts_batch(monkeypatch):
     os.getenv("RUN_LIVE_API_TESTS") != "1",
     reason="Live Semantic Scholar tests disabled",
 )
-def test_live_get_paper_retrieves_known_title():
+def test_live_get_paper_retrieves_full_metadata_and_relations():
     api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
     mode = "authenticated" if api_key else "unauthenticated"
-    sch = SemanticScholar(api_key=api_key) if api_key else SemanticScholar()
+    sch = SemanticScholar(api_key=api_key)
+
+    paper_id = "arXiv:1706.03762"  # "Attention Is All You Need"
+    fields_to_request = [
+        "title",
+        "abstract",
+        "referenceCount",
+        "citationCount",
+        "references",
+        "citations",
+    ]
+
     try:
-        paper = sch.get_paper("10.1093/mind/lix.236.433")
+        paper = sch.get_paper(paper_id, fields=fields_to_request)
     except (InternalServerErrorException, ConnectionRefusedError) as exc:
         pytest.skip(f"Semantic Scholar API ({mode}) unavailable: {exc}")
     except ObjectNotFoundException as exc:
         pytest.skip(f"Semantic Scholar ({mode}) could not find paper: {exc}")
 
-    assert "computing machinery" in paper.title.lower(), (
-        "Unexpected paper title returned by Semantic Scholar. "
-        f"Received: {paper.title!r}"
-    )
+    # Metadata checks
+    assert "attention is all you need" in paper.title.lower()
+    assert paper.abstract is not None
+    assert isinstance(paper.citationCount, int) and paper.citationCount > 10000
+    assert isinstance(paper.referenceCount, int) and paper.referenceCount > 0
+
+    # Relations checks
+    assert paper.references is not None
+    assert paper.citations is not None
+
+    if not paper.references:
+        pytest.fail("Expected references for this paper.")
+
+    if not paper.citations:
+        pytest.fail("Expected a highly cited paper to have citations.")
+
+    # Check that one of the citations has a title (i.e., it's a populated object)
+    assert any(c.title for c in paper.citations if c)
+    assert any(r.title for r in paper.references if r)

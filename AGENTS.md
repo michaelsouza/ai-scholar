@@ -60,10 +60,11 @@ Confidence is expected to land in `[0.0, 1.0]`. Out-of-range values are clamped 
 - Maintain readability by favouring straightforward control flow over clever constructs; prefer explicit data transformations to implicit magic.
 
 ## Testing and Validation
-- Unit coverage: `tests/test_search_client.py` fakes both provider sessions to exercise pagination, error handling, and Google Scholar conversions without network calls.
-- Live checks: `tests/test_live_services.py` stays skipped unless `RUN_LIVE_API_TESTS=1`; supply `SEMANTIC_SCHOLAR_API_KEY` and/or `SERPAPI_API_KEY` before opting in to avoid false failures.
-- Add or update unit tests under `tests/` whenever agent behaviour or storage contracts change; test new edge cases introduced by refinements or tooling additions.
-- Use focused test fixtures that mirror `PaperRecord` and database schemas so regressions in metadata handling surface early.
-- Run the existing test suite (`pytest`) before shipping substantial changes and ensure optional dependencies are guarded to keep tests deterministic.
-- Validate LangChain integrations with lightweight mocks or recorded responses to avoid brittle network dependencies in CI.
-- When modifying CLI wiring, include smoke tests that cover argument parsing, environment validation, and orchestrator bootstrapping paths.
+The project contains a comprehensive test suite in the `tests/` directory, separating fast unit tests from slower, network-dependent integration tests.
+
+- **Unit & Component Tests**: Files like `test_agents_logic.py`, `test_search_client.py`, and `test_storage_json.py` validate the core internal logic. They use mocks and fake clients to ensure components work correctly in isolation.
+- **Live Integration Tests**: Files ending in `_usage.py` (e.g., `test_google_scholar_api_usage.py`) and `test_live_services.py` perform real network calls to external APIs. They verify that the clients can handle live API responses and parse key metadata, including abstracts, citation counts, and references.
+- **Running Tests**:
+  - `pytest` runs only the fast unit tests by default.
+  - To run the live integration tests, create a `.env` file with `RUN_LIVE_API_TESTS=1` and the required API keys. The test suite, via `tests/conftest.py`, will automatically detect this file and enable the live tests.
+- **Continuous Integration**: The separation ensures that CI pipelines can run the fast, deterministic unit tests on every commit, while live tests can be run manually or on a schedule to check for breaking changes in external APIs.
