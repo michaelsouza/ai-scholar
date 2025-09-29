@@ -413,6 +413,9 @@ class CachedOpenAlexService:
 
 
 class SimpleThemeRelevanceAgent:
+    def set_run_context(self, *, seed: Optional[Work] = None, theme: Optional[str] = None) -> None:
+        """Hook for subclasses; heuristic agent does not use additional context."""
+
     def evaluate(self, works: Iterable[Work], *, theme: str, relation: Relation) -> List[WorkDecision]:
         tokens = self._prepare_theme(theme)
         decisions: List[WorkDecision] = []
@@ -496,6 +499,8 @@ class LLMThemeRelevanceAgent(SimpleThemeRelevanceAgent):
             self._headers["HTTP-Referer"] = app_url
         if app_title:
             self._headers["X-Title"] = app_title
+        self._seed: Optional[Work] = None
+        self._seed_theme: Optional[str] = None
 
     def evaluate(self, works: Iterable[Work], *, theme: str, relation: Relation) -> List[WorkDecision]:
         work_list = list(works)
@@ -571,6 +576,10 @@ class LLMThemeRelevanceAgent(SimpleThemeRelevanceAgent):
                 last_error = exc
         raise RuntimeError(f"LLM classification failed: {last_error}")
 
+    def set_run_context(self, *, seed: Optional[Work] = None, theme: Optional[str] = None) -> None:
+        self._seed = seed
+        self._seed_theme = theme
+
     def _log_interaction(
         self,
         work: Work,
@@ -588,9 +597,7 @@ class LLMThemeRelevanceAgent(SimpleThemeRelevanceAgent):
             pass
 
     def _build_messages(self, work: Work, *, theme: str, relation: Relation) -> List[Dict[str, str]]:
-        abstract_snippet = (work.abstract or "").strip()
-        if len(abstract_snippet) > 1200:
-            abstract_snippet = abstract_snippet[:1200] + "…"
+        abstract_text = (work.abstract or "").strip()
 
         author_line = ", ".join(work.authors) if work.authors else "Unknown"
         referenced_summary = ", ".join(work.referenced_works[:5])
@@ -606,10 +613,21 @@ class LLMThemeRelevanceAgent(SimpleThemeRelevanceAgent):
         ]
         if work.primary_topic:
             user_lines.append(f"Primary topic: {work.primary_topic}")
-        if abstract_snippet:
-            user_lines.append(f"Abstract: {abstract_snippet}")
+        if abstract_text:
+            user_lines.append(f"Abstract: {abstract_text}")
         if referenced_summary:
             user_lines.append(f"Referenced works: {referenced_summary}")
+
+        if self._seed is not None:
+            if getattr(self._seed, "title", None):
+                user_lines.append(f"Seed title: {self._seed.title}")
+            seed_abstract = getattr(self._seed, "abstract", None)
+            if seed_abstract:
+                seed_text = seed_abstract.strip()
+                if seed_text:
+                    user_lines.append(f"Seed abstract: {seed_text}")
+        if self._seed_theme and self._seed_theme != theme:
+            user_lines.append(f"Seed theme context: {self._seed_theme}")
 
         system_prompt = (
             "You are a research assistant evaluating whether scholarly works align with a given theme. "
@@ -746,6 +764,13 @@ class OpenAlexResearchOrchestrator:
 
         all_works: List[Work] = [seed] + references + citations
         keys = self._key_generator.assign_keys(all_works)
+
+        if hasattr(self._relevance_agent, "set_run_context"):
+            try:
+                self._relevance_agent.set_run_context(seed=seed, theme=theme)
+            except TypeError:
+                # Backward compat in case agent signature differs
+                self._relevance_agent.set_run_context(seed=seed)  # type: ignore[arg-type]
 
         reference_decisions = self._relevance_agent.evaluate(references, theme=theme, relation="reference")
         citation_decisions = self._relevance_agent.evaluate(citations, theme=theme, relation="citation")
