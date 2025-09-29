@@ -42,6 +42,7 @@ from codes.agent_openalex import (
     WorkDecision,
     Work,
 )
+from codes.project_repository import ProjectRepository
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -54,6 +55,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--cache",
         default="./data/openalex_cache.json",
         help="Path to JSON cache file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--project",
+        default=None,
+        help="Optional project name used to group multiple runs under the same theme",
+    )
+    parser.add_argument(
+        "--projects-root",
+        default="./data/projects",
+        help="Directory where project manifests and runs are stored (default: %(default)s)",
     )
     parser.add_argument(
         "--mailto",
@@ -112,6 +123,15 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
+
+    project_repo: ProjectRepository | None = None
+    default_cache_path = parser.get_default("cache")
+    if args.project:
+        project_repo = ProjectRepository(root=Path(args.projects_root))
+        project_slug = ProjectRepository.slugify(args.project)
+        if args.cache == default_cache_path:
+            project_cache = Path(args.projects_root) / project_slug / "openalex_cache.json"
+            args.cache = str(project_cache)
 
     console = Console() if Console else None
 
@@ -198,6 +218,21 @@ def main() -> None:
         status_ref["obj"] = status_obj
         result = orchestrator.run(seed_id=args.seed, theme=args.theme)
     status_ref["obj"] = None
+
+    saved_run_path = None
+    if project_repo:
+        saved_run_path = project_repo.save_run(args.project, result)
+
+    if saved_run_path:
+        try:
+            location = saved_run_path.relative_to(Path.cwd())
+        except ValueError:
+            location = saved_run_path
+        _emit(
+            console,
+            f"Persisted run result to {location}",
+            style="bold blue",
+        )
 
     _render_summary(console, result)
     _render_interactions(console, interaction_logs)

@@ -57,6 +57,36 @@ class WorkDecision:
     relation: Relation
     graph_key: str = ""
 
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "work": self.work.to_dict(),
+            "verdict": self.verdict,
+            "justification": self.justification,
+            "relation": self.relation,
+            "graph_key": self.graph_key,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, object]) -> "WorkDecision":
+        work_payload = payload.get("work")
+        if not isinstance(work_payload, dict):
+            work_payload = {}
+        if "openalex_id" not in work_payload:
+            work_payload = dict(work_payload)
+            work_payload["openalex_id"] = str(work_payload.get("id", ""))
+        work = Work.from_dict(work_payload)
+        verdict_raw = str(payload.get("verdict", "rejected"))
+        verdict: Verdict = "accepted" if verdict_raw == "accepted" else "rejected"
+        relation_raw = str(payload.get("relation", "reference"))
+        relation: Relation = "citation" if relation_raw == "citation" else "reference"
+        return cls(
+            work=work,
+            verdict=verdict,
+            justification=str(payload.get("justification", "")),
+            relation=relation,
+            graph_key=str(payload.get("graph_key", "")),
+        )
+
 
 @dataclass
 class GraphNode:
@@ -65,12 +95,56 @@ class GraphNode:
     role: Literal["seed", "reference", "citation"]
     verdict: Literal["accepted", "rejected", "seed"]
 
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "work_id": self.work_id,
+            "title": self.title,
+            "role": self.role,
+            "verdict": self.verdict,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, object]) -> "GraphNode":
+        return cls(
+            work_id=str(payload.get("work_id", "")),
+            title=str(payload.get("title", "")),
+            role=payload.get("role", "reference"),  # type: ignore[arg-type]
+            verdict=payload.get("verdict", "rejected"),  # type: ignore[arg-type]
+        )
+
 
 @dataclass
 class CitationGraph:
     seed_key: str
     nodes: Dict[str, GraphNode]
     edges: List[Tuple[str, str]]
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "seed_key": self.seed_key,
+            "nodes": {key: node.to_dict() for key, node in self.nodes.items()},
+            "edges": [[src, dst] for src, dst in self.edges],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, object]) -> "CitationGraph":
+        raw_nodes = payload.get("nodes", {})
+        nodes: Dict[str, GraphNode] = {}
+        if isinstance(raw_nodes, dict):
+            for key, value in raw_nodes.items():
+                if isinstance(value, dict):
+                    nodes[str(key)] = GraphNode.from_dict(value)
+        raw_edges = payload.get("edges", [])
+        edges: List[Tuple[str, str]] = []
+        if isinstance(raw_edges, list):
+            for item in raw_edges:
+                if isinstance(item, (list, tuple)) and len(item) == 2:
+                    edges.append((str(item[0]), str(item[1])))
+        return cls(
+            seed_key=str(payload.get("seed_key", "")),
+            nodes=nodes,
+            edges=edges,
+        )
 
 
 @dataclass
@@ -84,6 +158,50 @@ class OpenAlexResearchResult:
     @property
     def decisions(self) -> List[WorkDecision]:
         return self.accepted + self.rejected
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "seed": self.seed.to_dict(),
+            "theme": self.theme,
+            "accepted": [decision.to_dict() for decision in self.accepted],
+            "rejected": [decision.to_dict() for decision in self.rejected],
+            "graph": self.graph.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, object]) -> "OpenAlexResearchResult":
+        seed_payload = payload.get("seed")
+        if not isinstance(seed_payload, dict):
+            seed_payload = {}
+        if "openalex_id" not in seed_payload:
+            seed_payload = dict(seed_payload)
+            seed_payload["openalex_id"] = str(seed_payload.get("id", ""))
+        seed = Work.from_dict(seed_payload)
+        accepted_payload = payload.get("accepted") or []
+        rejected_payload = payload.get("rejected") or []
+        accepted: List[WorkDecision] = []
+        if isinstance(accepted_payload, list):
+            for item in accepted_payload:
+                if isinstance(item, dict):
+                    accepted.append(WorkDecision.from_dict(item))
+        rejected: List[WorkDecision] = []
+        if isinstance(rejected_payload, list):
+            for item in rejected_payload:
+                if isinstance(item, dict):
+                    rejected.append(WorkDecision.from_dict(item))
+        graph_payload = payload.get("graph") or {}
+        graph = (
+            CitationGraph.from_dict(graph_payload)
+            if isinstance(graph_payload, dict)
+            else CitationGraph(seed_key="", nodes={}, edges=[])
+        )
+        return cls(
+            seed=seed,
+            theme=str(payload.get("theme", "")),
+            accepted=accepted,
+            rejected=rejected,
+            graph=graph,
+        )
 
 
 class OpenAlexClient(Protocol):
